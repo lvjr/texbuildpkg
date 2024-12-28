@@ -10,27 +10,6 @@ local tbp = tbp or {}
 tbp.version = "2025@"
 tbp.date = "2024-12-15"
 
---------------------------------------------
---> \section{Some code from l3build.lua}
---------------------------------------------
-
-local lfs = require("lfs")
-
-kpse.set_program_name("kpsewhich")
-build_kpse_path = string.match(kpse.lookup("l3build.lua"),"(.*[/])")
-local function build_require(s)
-  require(kpse.lookup("l3build-"..s..".lua", { path = build_kpse_path } ) )
-end
-
------------------------------------------
-
-build_require("file-functions")
-
-release_date = "2021-04-26" -- for old build.lua file
-dofile("build.lua")
-
-build_require("variables")
-
 ------------------------------------------------------------
 --> \section{Some variables and functions}
 ------------------------------------------------------------
@@ -55,20 +34,41 @@ local function filesum(name)
   return md5sum(s)
 end
 
-local function readfile(name)
+local lfs = require("lfs")
+
+if os.type == "windows" then
+  tbp.slashsep = "\\"
+  tbp.null = "NUL"
+else
+  tbp.slashsep = "/"
+  tbp.null = "/dev/null"
+end
+
+function tbpNormalizePath(path)
+  if os.type == "windows" then
+    path = path:gsub("/", "\\")
+  else
+    path = path:gsub("\\", "/")
+  end
+  return path
+end
+
+currentdir = tbpNormalizePath(lfs.currentdir())
+
+function fileRead(name)
   local f = assert(io.open(name, "rb"))
   local s = f:read("*all")
   f:close()
   return s
 end
 
-local function writefile(name, sum)
-  local f = assert(io.open(name, "w"))
-  f:write(sum)
+function fileWrite(name, text)
+  local f = assert(io.open(name, "wb"))
+  f:write(text)
   f:close()
 end
 
-local function getfiles(path, pattern)
+function fileSearch(path, pattern)
   local files = { }
   for entry in lfs.dir(path) do
     if match(entry, pattern) then
@@ -78,11 +78,86 @@ local function getfiles(path, pattern)
   return files
 end
 
+function dirExists(dir)
+  return (lfs.attributes(dir, "mode") == "directory")
+end
+
+function fileExists(file)
+  return (lfs.attributes(file, "mode") == "file")
+end
+
+function fileConcatDir(dir, basename)
+  return dir .. tbp.slashsep .. basename
+end
+
+function fileGetJobName(file)
+  local basename = file:match("/([^/]+)$") or file
+  return basename:match("([^%.]+)[%.$]")
+end
+
+function fileCopy(basename, srcdir, destdir)
+  local c = fileRead(srcdir .. tbp.slashsep .. basename)
+  fileWrite(destdir .. tbp.slashsep .. basename, c)
+end
+
+function fileRemove(dir, basename)
+  return os.remove(fileConcatDir(dir,basename))
+end
+
+function fileRename(dir, srcname, destname)
+  return os.rename(fileConcatDir(dir,srcname), fileConcatDir(dir,destname))
+end
+
+function tbpGetAbsPath(path)
+  if path:sub(1,1) == "." then
+    path = currentdir .. tbpNormalizePath(path:sub(2))
+  end
+  return path
+end
+
+function tbpExecute(dir, cmd)
+  lfs.chdir(dir)
+  return os.execute(cmd)
+end
+
+------------------------------------------------------------
+--> \section{Initialize TeXBuildPkg}
+------------------------------------------------------------
+
+maindir = "."
+builddir = maindir .. "/tbpdir"
+testdir = builddir .. "/test"
+testfiledir = "./testfiles"
+
+checkengines = {"pdftex", "xetex", "luatex"}
+checkformat = "latex"
+test_order = {"log", "pdf"}
+checkruns = 1
+
+lvtext = ".tex"
+tlgext = ".tlg"
+logext = ".log"
+pdfext = ".pdf"
+imgext = ".png"
+
+if os.type == "windows" then
+  diffext = ".fc"
+  diffexe = "fc /n"
+else
+  diffext = ".diff"
+  diffexe = "diff -c --strip-trailing-cr"
+end
+
+dofile("tbpconfig.lua")
+
+maindir = tbpGetAbsPath(maindir)
+builddir = tbpGetAbsPath(builddir)
+testdir = tbpGetAbsPath(testdir)
+testfiledir = tbpGetAbsPath(testfiledir)
+
 ------------------------------------------------------------
 --> \section{Run check or save actions}
 ------------------------------------------------------------
-
-imgext = imgext or ".png"
 
 local function getimgopt(imgext)
   local imgopt = ""
@@ -101,14 +176,14 @@ local function getimgopt(imgext)
 end
 
 local function pdftoimg(path, pdf)
-  cmd = "pdftoppm " .. getimgopt(imgext) .. pdf .. " " .. jobname(pdf)
-  run(path, cmd)
+  cmd = "pdftoppm " .. getimgopt(imgext) .. pdf .. " " .. fileGetJobName(pdf)
+  tbpExecute(path, cmd)
 end
 
 local function saveImgMd5(dir, imgname, md5file, newmd5)
   print("save md5 and image files for " .. imgname)
-  cp(imgname, dir, testfiledir)
-  writefile(md5file, newmd5)
+  fileCopy(imgname, dir, testfiledir)
+  fileWrite(md5file, newmd5)
 end
 
 local issave = false
@@ -116,10 +191,10 @@ local issave = false
 local function checkOnePdf(dir, job)
   local errorlevel
   local imgname = job .. imgext
-  local md5file = testfiledir .. "/" .. job .. ".md5"
-  local newmd5 = filesum(dir .. "/" .. imgname)
-  if fileexists(md5file) then
-    local oldmd5 = readfile(md5file)
+  local md5file = testfiledir .. tbp.slashsep .. job .. ".md5"
+  local newmd5 = filesum(dir .. tbp.slashsep .. imgname)
+  if fileExists(md5file) then
+    local oldmd5 = fileRead(md5file)
     if newmd5 == oldmd5 then
       errorlevel = 0
       print("md5 check passed for " .. imgname)
@@ -128,13 +203,13 @@ local function checkOnePdf(dir, job)
       print("md5 check failed for " .. imgname)
       local imgdiffexe = os.getenv("imgdiffexe")
       if imgdiffexe then
-        local oldimg = abspath(testfiledir) .. "/" .. imgname
-        local newimg = abspath(dir) .. "/" .. imgname
+        local oldimg = testfiledir .. tbp.slashsep .. imgname
+        local newimg = dir .. tbp.slashsep .. imgname
         local diffname = job .. ".diff.png"
         local cmd = imgdiffexe .. " " .. oldimg .. " " .. newimg
                     .. " -compose src " .. diffname
         print("creating image diff file " .. diffname)
-        run(dir, cmd)
+        tbpExecute(dir, cmd)
       elseif issave == true then
         saveImgMd5(dir, imgname, md5file, newmd5)
       end
@@ -150,22 +225,22 @@ local function checkOneFolder(dir)
   print("checking folder " .. dir)
   local errorlevel = 0
   local pattern = "%" .. pdfext .. "$"
-  local files = getfiles(dir, pattern)
+  local files = fileSearch(dir, pattern)
   for _, v in ipairs(files) do
     pdftoimg(dir, v)
-    pattern = "^" .. jobname(v):gsub("%-", "%%-") .. "%-%d+%" .. imgext .. "$"
-    local imgfiles = getfiles(dir, pattern)
+    pattern = "^" .. fileGetJobName(v):gsub("%-", "%%-") .. "%-%d+%" .. imgext .. "$"
+    local imgfiles = fileSearch(dir, pattern)
     if #imgfiles == 1 then
-      local imgname = jobname(v) .. imgext
-      if fileexists(dir .. "/" .. imgname) then
-        rm(dir, imgname)
+      local imgname = fileGetJobName(v) .. imgext
+      if fileExists(dir .. tbp.slashsep .. imgname) then
+        fileRemove(dir, imgname)
       end
-      ren(dir, imgfiles[1], imgname)
-      local e = checkOnePdf(dir, jobname(v)) or 0
+      fileRename(dir, imgfiles[1], imgname)
+      local e = checkOnePdf(dir, fileGetJobName(v)) or 0
       errorlevel = errorlevel + e
     else
       for _, i in ipairs(imgfiles) do
-        local e = checkOnePdf(dir, jobname(i)) or 0
+        local e = checkOnePdf(dir, fileGetJobName(i)) or 0
         errorlevel = errorlevel + e
       end
     end
