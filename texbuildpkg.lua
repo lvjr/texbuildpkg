@@ -55,6 +55,12 @@ end
 
 currentdir = tbpNormalizePath(lfs.currentdir())
 
+function tbpGlobToPattern(glob)
+  local pattern = glob:gsub("([%.%-%+])", "%%%1")
+    :gsub("%*", "[^/\\]*"):gsub("%?", "[^/\\]")
+  return pattern
+end
+
 function fileRead(name)
   local f = assert(io.open(name, "rb"))
   local s = f:read("*all")
@@ -86,18 +92,27 @@ function fileExists(file)
   return (lfs.attributes(file, "mode") == "file")
 end
 
-function fileConcatDir(dir, basename)
-  return dir .. tbp.slashsep .. basename
+function fileConcatDir(dir, filename)
+  return dir .. tbp.slashsep .. filename
 end
 
-function fileGetJobName(file)
-  local basename = file:match("/([^/]+)$") or file
-  return basename:match("([^%.]+)[%.$]")
+function fileGetBaseName(file)
+  local filename = file:match("/([^/]+)$") or file
+  return filename:match("([^%.]+)[%.$]")
 end
 
-function fileCopy(basename, srcdir, destdir)
-  local c = fileRead(srcdir .. tbp.slashsep .. basename)
-  fileWrite(destdir .. tbp.slashsep .. basename, c)
+function fileCopy(filename, srcdir, destdir)
+  local c = fileRead(srcdir .. tbp.slashsep .. filename)
+  fileWrite(destdir .. tbp.slashsep .. filename, c)
+end
+
+function fileCopyGlob(glob, srcdir, destdir)
+  local pattern = tbpGlobToPattern(glob)
+  local files = fileSearch(srcdir, pattern)
+  for _, f in ipairs(files) do
+    local c = fileRead(srcdir .. tbp.slashsep .. f)
+    fileWrite(destdir .. tbp.slashsep .. f, c)
+  end
 end
 
 function fileRemove(dir, basename)
@@ -129,8 +144,10 @@ builddir = maindir .. "/tbpdir"
 testdir = builddir .. "/test"
 testfiledir = "./testfiles"
 
-checkengines = {"pdftex", "xetex", "luatex"}
-checkformat = "latex"
+sourcefiles = {}
+
+checkconfigs = {"build"}
+checkprograms = {"pdflatex", "xelatex", "lualatex"}
 test_order = {"log", "pdf"}
 checkruns = 1
 
@@ -155,6 +172,143 @@ builddir = tbpGetAbsPath(builddir)
 testdir = tbpGetAbsPath(testdir)
 testfiledir = tbpGetAbsPath(testfiledir)
 
+-- it equals to total number of failed tests
+errorlevel = 0
+
+------------------------------------------------------------
+--> \section{Create TeXBuildPkg Objects}
+------------------------------------------------------------
+
+TbpFile = {}
+
+function TbpFile:new(filename)
+  local o = {
+    filename = filename,
+    basename = fileGetBaseName(filename)
+  }
+  setmetatable(o, self)
+  self.__index = self
+  return o
+end
+
+function TbpFile:copy(srcdir, destdir)
+  fileCopy(self.filename, srcdir, destdir)
+  self.srcdir = srcdir
+  self.destdir = destdir
+  return self
+end
+
+local optn = "--interaction=nonstopmode"
+
+local function makeCmdString(prog, name)
+  return prog .. " " .. optn .. " " .. name .. ".tex" .. " >" .. tbp.null
+end
+
+local function texCompileOne(dir, prog, name)
+  local cmd = makeCmdString(prog, name)
+  return tbpExecute(dir, cmd)
+end
+
+function TbpFile:tex(prog)
+  texCompileOne(self.destdir, prog, self.basename)
+  self.prog = prog
+  return self
+end
+
+function TbpFile:makeTlgFile()
+  local dir = self.destdir
+  local basename = self.basename
+  local file = dir .. tbp.slashsep .. basename .. logext
+  local text = fileRead(file)
+  text = text:gsub("\r\n", "\n")
+             :match("START%-TEST%-LOG\n+(.+)\nEND%-TEST%-LOG")
+  if not text then
+    error("Could not make tlg file for " .. basename)
+  end
+  --- normalize tlg file
+  text = text:gsub("\n[\n ]*", "\n"):gsub("%(%./", "(")
+             :gsub("( on input line )%d+", "%1...")
+  file = dir .. tbp.slashsep .. basename .. "." .. self.prog .. tlgext
+  fileWrite(file, text)
+  local oldfile = testfiledir .. tbp.slashsep .. basename .. tlgext
+  return self
+end
+
+function TbpFile:compareTlgFiles()
+  local oldtlg = self.srcdir .. tbp.slashsep .. self.basename .. tlgext
+  local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.prog .. tlgext
+  local diffile = self.basename .. "." .. self.prog .. diffext
+  cmd = diffexe .. " " .. oldtlg .. " " .. newtlg .. ">" .. diffile
+  self.error = self.error + tbpExecute(self.destdir, cmd)
+  return self
+end
+
+------------------------------------------------------------
+--> \section{Compile TeX Files}
+------------------------------------------------------------
+
+local function tbpIpairs(list)
+  if type(list) == "nil" then
+    list = {}
+  elseif type(list) ~= "table" then
+    list = {list}
+  end
+  return ipairs(list)
+end
+
+local function tbpIpairsGlob(globlist, dir)
+  if type(globlist) == "nil" then
+    globlist = {}
+  elseif type(globlist) ~= "table" then
+    globlist = {globlist}
+  end
+  local list = {}
+  dir = dir or maindir
+  for _, glob in ipairs(globlist) do
+    local pattern = tbpGlobToPattern(glob)
+    local items = fileSearch(dir, pattern)
+    for _, v in ipairs(items) do
+      table.insert(list, v)
+    end
+  end
+  return ipairs(list)
+end
+
+local function tbpMakeDir(dirlist)
+  for _, dir in tbpIpairs(dirlist) do
+    if not dirExists(dir) then
+      lfs.mkdir(dir)
+    end
+  end
+end
+
+local function tbpCopyFile(globs, srcdir, destdir)
+  for _, g in tbpIpairs(globs) do
+    fileCopyGlob(g, srcdir, destdir)
+  end
+end
+
+local function tbpCheck()
+  tbpMakeDir({builddir, testdir})
+  tbpCopyFile(sourcefiles, maindir, testdir)
+  local pattern = "%" .. lvtext .. "$"
+  local files = fileSearch(testfiledir, pattern)
+  print("Running checks in " .. testdir)
+  for _, f in ipairs(files) do
+    local tbpfile = TbpFile:new(f):copy(testfiledir, testdir)
+    print("  " .. tbpfile.basename)
+    tbpfile.error = 0
+    for _, prog in ipairs(checkprograms) do
+      tbpfile = tbpfile:tex(prog):makeTlgFile():compareTlgFiles()
+    end
+    if tbpfile.error > 0 then
+      print("          --> failed")
+      errorlevel = errorlevel + 1
+    end
+  end
+  return errorlevel
+end
+
 ------------------------------------------------------------
 --> \section{Run check or save actions}
 ------------------------------------------------------------
@@ -176,7 +330,7 @@ local function getimgopt(imgext)
 end
 
 local function pdftoimg(path, pdf)
-  cmd = "pdftoppm " .. getimgopt(imgext) .. pdf .. " " .. fileGetJobName(pdf)
+  cmd = "pdftoppm " .. getimgopt(imgext) .. pdf .. " " .. fileGetBaseName(pdf)
   tbpExecute(path, cmd)
 end
 
@@ -228,19 +382,19 @@ local function checkOneFolder(dir)
   local files = fileSearch(dir, pattern)
   for _, v in ipairs(files) do
     pdftoimg(dir, v)
-    pattern = "^" .. fileGetJobName(v):gsub("%-", "%%-") .. "%-%d+%" .. imgext .. "$"
+    pattern = "^" .. fileGetBaseName(v):gsub("%-", "%%-") .. "%-%d+%" .. imgext .. "$"
     local imgfiles = fileSearch(dir, pattern)
     if #imgfiles == 1 then
-      local imgname = fileGetJobName(v) .. imgext
+      local imgname = fileGetBaseName(v) .. imgext
       if fileExists(dir .. tbp.slashsep .. imgname) then
         fileRemove(dir, imgname)
       end
       fileRename(dir, imgfiles[1], imgname)
-      local e = checkOnePdf(dir, fileGetJobName(v)) or 0
+      local e = checkOnePdf(dir, fileGetBaseName(v)) or 0
       errorlevel = errorlevel + e
     else
       for _, i in ipairs(imgfiles) do
-        local e = checkOnePdf(dir, fileGetJobName(i)) or 0
+        local e = checkOnePdf(dir, fileGetBaseName(i)) or 0
         errorlevel = errorlevel + e
       end
     end
@@ -318,7 +472,7 @@ local function tbpMain(tbparg)
   -- remove leading dashes
   action = match(action, "^%-*(.*)$")
   if action == "check" then
-    return checkAllFolders(tbparg)
+    return tbpCheck(tbparg) + checkAllFolders(tbparg)
   elseif action == "save" then
     issave = true
     return checkAllFolders(tbparg)
@@ -336,8 +490,7 @@ local function main()
   return tbpMain(arg)
 end
 
--- it equals to total number of failed tests
-local errorlevel = main()
+main()
 
 --print(errorlevel)
 
