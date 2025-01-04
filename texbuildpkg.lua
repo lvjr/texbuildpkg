@@ -227,8 +227,9 @@ errorlevel = 0
 
 TbpFile = {}
 
-function TbpFile:new(filename)
+function TbpFile:new(filename, config)
   local o = {
+    config = config,
     filename = filename,
     basename = fileGetBaseName(filename)
   }
@@ -293,7 +294,7 @@ function TbpFile:compareTlgFiles()
   local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.prog .. tlgext
   local diffile = self.basename .. "." .. self.prog .. diffext
   cmd = diffexe .. " " .. oldtlg .. " " .. newtlg .. ">" .. diffile
-  self.error = self.error + tbpExecute(self.destdir, cmd)
+  self.logerror = self.logerror + tbpExecute(self.destdir, cmd)
   return self
 end
 
@@ -330,27 +331,25 @@ end
 
 local issave = false
 
-local function checkOnePdf(dir, job)
+local function checkOnePdf(dir, base)
   local errorlevel
-  local imgname = job .. imgext
-  local md5file = testfiledir .. tbp.slashsep .. job .. ".md5"
+  local imgname = base .. imgext
+  local md5file = testfiledir .. tbp.slashsep .. base .. ".md5"
   local newmd5 = filesum(dir .. tbp.slashsep .. imgname)
   if fileExists(md5file) then
     local oldmd5 = fileRead(md5file)
     if newmd5 == oldmd5 then
       errorlevel = 0
-      print("md5 check passed for " .. imgname)
     else
       errorlevel = 1
-      print("md5 check failed for " .. imgname)
       local imgdiffexe = os.getenv("imgdiffexe")
       if imgdiffexe then
         local oldimg = testfiledir .. tbp.slashsep .. imgname
         local newimg = dir .. tbp.slashsep .. imgname
-        local diffname = job .. ".diff.png"
+        local diffname = base .. ".diff.png"
         local cmd = imgdiffexe .. " " .. oldimg .. " " .. newimg
                     .. " -compose src " .. diffname
-        print("creating image diff file " .. diffname)
+        --print("creating image diff file " .. diffname)
         tbpExecute(dir, cmd)
       elseif issave == true then
         saveImgMd5(dir, imgname, md5file, newmd5)
@@ -363,31 +362,29 @@ local function checkOnePdf(dir, job)
   return errorlevel
 end
 
-local function checkOneFolder(dir)
-  print("checking folder " .. dir)
-  local errorlevel = 0
-  local pattern = "%" .. pdfext .. "$"
-  local files = fileSearch(dir, pattern)
-  for _, v in ipairs(files) do
-    pdftoimg(dir, v)
-    pattern = "^" .. fileGetBaseName(v):gsub("%-", "%%-") .. "%-%d+%" .. imgext .. "$"
-    local imgfiles = fileSearch(dir, pattern)
-    if #imgfiles == 1 then
-      local imgname = fileGetBaseName(v) .. imgext
-      if fileExists(dir .. tbp.slashsep .. imgname) then
-        fileRemove(dir, imgname)
-      end
-      fileRename(dir, imgfiles[1], imgname)
-      local e = checkOnePdf(dir, fileGetBaseName(v)) or 0
-      errorlevel = errorlevel + e
-    else
-      for _, i in ipairs(imgfiles) do
-        local e = checkOnePdf(dir, fileGetBaseName(i)) or 0
-        errorlevel = errorlevel + e
-      end
+function TbpFile:compareImage()
+  local base = self.basename
+  local dir = self.destdir
+  pdftoimg(dir, base .. pdfext)
+  local pattern = "^" .. base:gsub("%-", "%%-") .. "%-%d+%" .. imgext .. "$"
+  local imgfiles = fileSearch(dir, pattern)
+  local e = 0
+  if #imgfiles == 1 then
+    local imgname = base .. imgext
+    if fileExists(dir .. tbp.slashsep .. imgname) then
+      fileRemove(dir, imgname)
+    end
+    fileRename(dir, imgfiles[1], imgname)
+    e = checkOnePdf(dir, base)
+  else
+    for _, i in ipairs(imgfiles) do
+      e = e + checkOnePdf(dir, fileGetBaseName(i))
     end
   end
-  return errorlevel
+  if e > 0 then
+    self.imgerror = self.imgerror + 1
+  end
+  return self
 end
 
 local function cfgToDir(cfg)
@@ -450,14 +447,22 @@ local function tbpCheckOne(cfg)
   local files = fileSearch(testfiledir, pattern)
   print("Running checks in " .. realtestdir)
   for _, f in ipairs(files) do
-    local tbpfile = TbpFile:new(f):copy(testfiledir, realtestdir)
+    local tbpfile = TbpFile:new(f, cfg):copy(testfiledir, realtestdir)
     print("  " .. tbpfile.basename)
-    tbpfile.error = 0
+    tbpfile.logerror = 0
     for _, prog in ipairs(checkprograms) do
       tbpfile = tbpfile:tex(prog):makeTlgFile():compareTlgFiles()
     end
-    if tbpfile.error > 0 then
-      print("          --> failed")
+    if tbpfile.logerror > 0 then
+      print("      --> log check failed")
+      errorlevel = errorlevel + 1
+    end
+    tbpfile.imgerror = 0
+    tpbfile = tbpfile:compareImage()
+    if tbpfile.imgerror > 0 then
+      print("      --> img check failed")
+    end
+    if (tbpfile.logerror > 0 or tbpfile.imgerror > 0) then
       errorlevel = errorlevel + 1
     end
   end
@@ -514,7 +519,7 @@ local function tbpMain(tbparg)
   -- remove leading dashes
   action = match(action, "^%-*(.*)$")
   if action == "check" then
-    return tbpCheck(tbparg) + checkAllFolders(tbparg)
+    return tbpCheck(tbparg)
   elseif action == "save" then
     issave = true
     return checkAllFolders(tbparg)
