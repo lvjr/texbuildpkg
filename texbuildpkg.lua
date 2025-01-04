@@ -135,6 +135,47 @@ function tbpExecute(dir, cmd)
   return os.execute(cmd)
 end
 
+local function tbpIpairs(list)
+  if type(list) == "nil" then
+    list = {}
+  elseif type(list) ~= "table" then
+    list = {list}
+  end
+  return ipairs(list)
+end
+
+local function tbpIpairsGlob(globlist, dir)
+  if type(globlist) == "nil" then
+    globlist = {}
+  elseif type(globlist) ~= "table" then
+    globlist = {globlist}
+  end
+  local list = {}
+  dir = dir or maindir
+  for _, glob in ipairs(globlist) do
+    local pattern = tbpGlobToPattern(glob)
+    local items = fileSearch(dir, pattern)
+    for _, v in ipairs(items) do
+      table.insert(list, v)
+    end
+  end
+  return ipairs(list)
+end
+
+local function tbpMakeDir(dirlist)
+  for _, dir in tbpIpairs(dirlist) do
+    if not dirExists(dir) then
+      lfs.mkdir(dir)
+    end
+  end
+end
+
+local function tbpCopyFile(globs, srcdir, destdir)
+  for _, g in tbpIpairs(globs) do
+    fileCopyGlob(g, srcdir, destdir)
+  end
+end
+
 ------------------------------------------------------------
 --> \section{Initialize TeXBuildPkg}
 ------------------------------------------------------------
@@ -203,6 +244,10 @@ function TbpFile:copy(srcdir, destdir)
   return self
 end
 
+------------------------------------------------------------
+--> \section{Compile TeX files}
+------------------------------------------------------------
+
 local optn = "--interaction=nonstopmode"
 
 local function makeCmdString(prog, name)
@@ -219,6 +264,10 @@ function TbpFile:tex(prog)
   self.prog = prog
   return self
 end
+
+------------------------------------------------------------
+--> \section{Log-based regression tests}
+------------------------------------------------------------
 
 function TbpFile:makeTlgFile()
   local dir = self.destdir
@@ -249,102 +298,7 @@ function TbpFile:compareTlgFiles()
 end
 
 ------------------------------------------------------------
---> \section{Compile TeX Files}
-------------------------------------------------------------
-
-local function tbpIpairs(list)
-  if type(list) == "nil" then
-    list = {}
-  elseif type(list) ~= "table" then
-    list = {list}
-  end
-  return ipairs(list)
-end
-
-local function tbpIpairsGlob(globlist, dir)
-  if type(globlist) == "nil" then
-    globlist = {}
-  elseif type(globlist) ~= "table" then
-    globlist = {globlist}
-  end
-  local list = {}
-  dir = dir or maindir
-  for _, glob in ipairs(globlist) do
-    local pattern = tbpGlobToPattern(glob)
-    local items = fileSearch(dir, pattern)
-    for _, v in ipairs(items) do
-      table.insert(list, v)
-    end
-  end
-  return ipairs(list)
-end
-
-local function tbpMakeDir(dirlist)
-  for _, dir in tbpIpairs(dirlist) do
-    if not dirExists(dir) then
-      lfs.mkdir(dir)
-    end
-  end
-end
-
-local function tbpCopyFile(globs, srcdir, destdir)
-  for _, g in tbpIpairs(globs) do
-    fileCopyGlob(g, srcdir, destdir)
-  end
-end
-
-local function tbpCopyCfg(cfg, realtestdir)
-  local filename = testcfgname .. cfgext
-  if cfg ~= "default" then
-    filename = testcfgname .. "-" .. cfg .. cfgext
-  end
-  if fileExists(testfiledir .. tbp.slashsep .. filename) then
-    fileCopy(filename, testfiledir, realtestdir)
-  end
-  if cfg ~= "default" then
-    fileRename(realtestdir, filename, testcfgname .. cfgext)
-  end
-end
-
-local function tbpCheckOne(cfg)
-  local realtestdir = testdir
-  if cfg ~= "default" then
-    realtestdir = testdir .. cfg
-  end
-  tbpMakeDir({builddir, realtestdir})
-  tbpCopyFile(sourcefiles, maindir, realtestdir)
-  tbpCopyCfg(cfg, realtestdir)
-  local pattern = "%" .. lvtext .. "$"
-  local files = fileSearch(testfiledir, pattern)
-  print("Running checks in " .. realtestdir)
-  for _, f in ipairs(files) do
-    local tbpfile = TbpFile:new(f):copy(testfiledir, realtestdir)
-    print("  " .. tbpfile.basename)
-    tbpfile.error = 0
-    for _, prog in ipairs(checkprograms) do
-      tbpfile = tbpfile:tex(prog):makeTlgFile():compareTlgFiles()
-    end
-    if tbpfile.error > 0 then
-      print("          --> failed")
-      errorlevel = errorlevel + 1
-    end
-  end
-  return errorlevel
-end
-
-local function tbpCheck()
-  tbpCheckOne("default")
-  if #moreconfigs > 0 then
-    for _, item in ipairs(moreconfigs) do
-      item[2]()
-      tbpCheckOne(item[1])
-    end
-  end
-  return errorlevel
-end
-
-------------------------------------------------------------
---> \section{Run check or save actions}
+--> \section{Image-based regression tests}
 ------------------------------------------------------------
 
 local function getimgopt(imgext)
@@ -465,6 +419,60 @@ local function checkAllFolders(arglist)
       return errorlevel
     end
   end
+end
+
+------------------------------------------------------------
+--> \section{Check regression files}
+------------------------------------------------------------
+
+local function tbpCopyCfg(cfg, realtestdir)
+  local filename = testcfgname .. cfgext
+  if cfg ~= "default" then
+    filename = testcfgname .. "-" .. cfg .. cfgext
+  end
+  if fileExists(testfiledir .. tbp.slashsep .. filename) then
+    fileCopy(filename, testfiledir, realtestdir)
+  end
+  if cfg ~= "default" then
+    fileRename(realtestdir, filename, testcfgname .. cfgext)
+  end
+end
+
+local function tbpCheckOne(cfg)
+  local realtestdir = testdir
+  if cfg ~= "default" then
+    realtestdir = testdir .. cfg
+  end
+  tbpMakeDir({builddir, realtestdir})
+  tbpCopyFile(sourcefiles, maindir, realtestdir)
+  tbpCopyCfg(cfg, realtestdir)
+  local pattern = "%" .. lvtext .. "$"
+  local files = fileSearch(testfiledir, pattern)
+  print("Running checks in " .. realtestdir)
+  for _, f in ipairs(files) do
+    local tbpfile = TbpFile:new(f):copy(testfiledir, realtestdir)
+    print("  " .. tbpfile.basename)
+    tbpfile.error = 0
+    for _, prog in ipairs(checkprograms) do
+      tbpfile = tbpfile:tex(prog):makeTlgFile():compareTlgFiles()
+    end
+    if tbpfile.error > 0 then
+      print("          --> failed")
+      errorlevel = errorlevel + 1
+    end
+  end
+  return errorlevel
+end
+
+local function tbpCheck()
+  tbpCheckOne("default")
+  if #moreconfigs > 0 then
+    for _, item in ipairs(moreconfigs) do
+      item[2]()
+      tbpCheckOne(item[1])
+    end
+  end
+  return errorlevel
 end
 
 ------------------------------------------------------------
