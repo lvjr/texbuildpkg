@@ -151,6 +151,8 @@ checkprograms = {"pdflatex", "xelatex", "lualatex"}
 test_order = {"log", "pdf"}
 checkruns = 1
 
+moreconfigs = {}
+
 lvtext = ".tex"
 tlgext = ".tlg"
 logext = ".log"
@@ -171,6 +173,9 @@ maindir = tbpGetAbsPath(maindir)
 builddir = tbpGetAbsPath(builddir)
 testdir = tbpGetAbsPath(testdir)
 testfiledir = tbpGetAbsPath(testfiledir)
+
+testcfgname = "regression-test"
+cfgext = ".cfg"
 
 -- it equals to total number of failed tests
 errorlevel = 0
@@ -288,14 +293,32 @@ local function tbpCopyFile(globs, srcdir, destdir)
   end
 end
 
-local function tbpCheck()
-  tbpMakeDir({builddir, testdir})
-  tbpCopyFile(sourcefiles, maindir, testdir)
+local function tbpCopyCfg(cfg, realtestdir)
+  local filename = testcfgname .. cfgext
+  if cfg ~= "default" then
+    filename = testcfgname .. "-" .. cfg .. cfgext
+  end
+  if fileExists(testfiledir .. tbp.slashsep .. filename) then
+    fileCopy(filename, testfiledir, realtestdir)
+  end
+  if cfg ~= "default" then
+    fileRename(realtestdir, filename, testcfgname .. cfgext)
+  end
+end
+
+local function tbpCheckOne(cfg)
+  local realtestdir = testdir
+  if cfg ~= "default" then
+    realtestdir = testdir .. cfg
+  end
+  tbpMakeDir({builddir, realtestdir})
+  tbpCopyFile(sourcefiles, maindir, realtestdir)
+  tbpCopyCfg(cfg, realtestdir)
   local pattern = "%" .. lvtext .. "$"
   local files = fileSearch(testfiledir, pattern)
-  print("Running checks in " .. testdir)
+  print("Running checks in " .. realtestdir)
   for _, f in ipairs(files) do
-    local tbpfile = TbpFile:new(f):copy(testfiledir, testdir)
+    local tbpfile = TbpFile:new(f):copy(testfiledir, realtestdir)
     print("  " .. tbpfile.basename)
     tbpfile.error = 0
     for _, prog in ipairs(checkprograms) do
@@ -304,6 +327,17 @@ local function tbpCheck()
     if tbpfile.error > 0 then
       print("          --> failed")
       errorlevel = errorlevel + 1
+    end
+  end
+  return errorlevel
+end
+
+local function tbpCheck()
+  tbpCheckOne("default")
+  if #moreconfigs > 0 then
+    for _, item in ipairs(moreconfigs) do
+      item[2]()
+      tbpCheckOne(item[1])
     end
   end
   return errorlevel
