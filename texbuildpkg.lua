@@ -208,6 +208,13 @@ else
   diffexe = "diff -c --strip-trailing-cr"
 end
 
+options = {
+  config = {"default"},
+  debug = false,
+  engine = {},
+  names = {}
+}
+
 dofile("tbpconfig.lua")
 
 maindir = tbpGetAbsPath(maindir)
@@ -387,37 +394,6 @@ function TbpFile:compareImage()
   return self
 end
 
-local function cfgToDir(cfg)
-  if cfg == "build" then
-    return testdir
-  else
-    return testdir .. "-" .. cfg
-  end
-end
-
-local function checkAllFolders(arglist)
-  if arglist[1] == "-c" then
-    if arglist[2] then
-      return checkOneFolder(cfgToDir(arglist[2]))
-    else
-      print("missing config name for -c option")
-      return 0
-    end
-  else
-    if #checkconfigs == 0 then
-      return checkOneFolder(testdir)
-    else
-      local errorlevel = 0
-      for _, v in ipairs(checkconfigs) do
-        local dir = cfgToDir(v)
-        local e = checkOneFolder(dir) or 0
-        errorlevel = errorlevel + e
-      end
-      return errorlevel
-    end
-  end
-end
-
 ------------------------------------------------------------
 --> \section{Check regression files}
 ------------------------------------------------------------
@@ -513,22 +489,73 @@ end
 --> \section{Respond to user input}
 ------------------------------------------------------------
 
+local shortoptions = {
+  c = "config",
+  e = "engine"
+}
+
+local function tbpSetTabOption(key, names)
+  options[key] = {}
+  for n in names:gmatch("[^,]+") do
+    table.insert(options[key], n)
+  end
+end
+
+local function tbpParseOneOption(key, input)
+  local value = options[key]
+  if type(value) == "boolean" then
+    options[key] = true
+  elseif type(value) == "table" then
+    return true
+  else
+    print("Unknown option " .. input .. "\n")
+    help()
+    os.exit(1)
+  end
+  return false
+end
+
+local function tbpParseOptions(arglist)
+  local istabvalue = false
+  local key = ""
+  for _, item in ipairs(arglist) do
+    if istabvalue then
+      tbpSetTabOption(key, item)
+      istabvalue = false
+    elseif item:match("^%-%-") then
+      key = item:sub(3)
+      istabvalue = tbpParseOneOption(key, item)
+    elseif item:match("^%-") then
+      key = shortoptions[item:sub(2)]
+      istabvalue = tbpParseOneOption(key, item)
+    else
+      tbpSetTabOption("names", item)
+    end
+  end
+  if istabvalue then
+    print("Missing name(s) for option " .. arglist[#arglist] .. "\n")
+    help()
+    os.exit(1)
+  end
+end
+
 local function tbpMain(tbparg)
   if tbparg[1] == nil then return help() end
   local action = remove(tbparg, 1)
   -- remove leading dashes
   action = match(action, "^%-*(.*)$")
+  tbpParseOptions(tbparg)
   if action == "check" then
-    return tbpCheck(tbparg)
+    return tbpCheck()
   elseif action == "save" then
     issave = true
-    return checkAllFolders(tbparg)
+    return tbpCheck()
   elseif action == "help" then
     return help()
   elseif action == "version" then
     return version()
   else
-    print("unknown action '" .. action .. "'\n")
+    print("Unknown action '" .. action .. "'\n")
     return help()
   end
 end
