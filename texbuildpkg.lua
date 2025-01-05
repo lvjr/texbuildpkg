@@ -244,9 +244,9 @@ check = {
   runs = 1
 }
 
-lvtext = ".tex"
-tlgext = ".tlg"
+texext = ".tex"
 logext = ".log"
+nlogext = ".nlog"
 pdfext = ".pdf"
 imgext = ".png"
 
@@ -334,15 +334,15 @@ function TbpFile:makeTlgFile()
   --- normalize tlg file
   text = text:gsub("\n[\n ]*", "\n"):gsub("%(%./", "(")
              :gsub("( on input line )%d+", "%1...")
-  file = dir .. tbp.slashsep .. basename .. "." .. self.engine .. tlgext
+  file = dir .. tbp.slashsep .. basename .. "." .. self.engine .. nlogext
   fileWrite(file, text)
-  local oldfile = testfiledir .. tbp.slashsep .. basename .. tlgext
+  local oldfile = testfiledir .. tbp.slashsep .. basename .. nlogext
   return self
 end
 
 function TbpFile:compareTlgFiles()
-  local oldtlg = self.srcdir .. tbp.slashsep .. self.basename .. tlgext
-  local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. tlgext
+  local oldtlg = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
+  local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
   local diffile = self.basename .. "." .. self.engine .. diffext
   cmd = diffexe .. " " .. oldtlg .. " " .. newtlg .. ">" .. diffile
   self.logerror = self.logerror + tbpExecute(self.destdir, cmd)
@@ -463,7 +463,7 @@ local function tbpCheckOne(cfg)
   tbpMakeDir({builddir, realtestdir})
   tbpCopyFile(sourcefiles, maindir, realtestdir)
   tbpCopyCfg(cfg, realtestdir)
-  local pattern = "%" .. lvtext .. "$"
+  local pattern = "%" .. texext .. "$"
   local files = fileSearch(testfiledir, pattern)
   print("Running checks in " .. realtestdir)
   for _, f in ipairs(files) do
