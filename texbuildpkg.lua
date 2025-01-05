@@ -218,8 +218,28 @@ testfiledir = "./testfiles"
 
 sourcefiles = {}
 
+tbpformatcmds = {
+  tex = {
+    pdftex = "pdftex",
+    xetex = "xetex",
+    luatex = "luatex"
+  },
+  latex = {
+    pdftex = "pdflatex",
+    xetex = "xelatex",
+    luatex = "lualatex"
+  },
+  context = {
+    pdftex = "texexec",
+    xetex = "texexec --xetex",
+    luatex = "context --luatex",
+    luametatex = "context"
+  }
+}
+
 checkconfigs = {"build"}
-checkprograms = {"pdflatex", "xelatex", "lualatex"}
+checkengines = {"pdftex", "xetex", "luatex"}
+checkformat = "latex"
 test_order = {"log", "pdf"}
 checkruns = 1
 
@@ -289,8 +309,9 @@ local function texCompileOne(dir, prog, name)
   return tbpExecute(dir, cmd)
 end
 
-function TbpFile:tex(prog)
+function TbpFile:tex(engine, prog)
   texCompileOne(self.destdir, prog, self.basename)
+  self.engine = engine
   self.prog = prog
   return self
 end
@@ -312,7 +333,7 @@ function TbpFile:makeTlgFile()
   --- normalize tlg file
   text = text:gsub("\n[\n ]*", "\n"):gsub("%(%./", "(")
              :gsub("( on input line )%d+", "%1...")
-  file = dir .. tbp.slashsep .. basename .. "." .. self.prog .. tlgext
+  file = dir .. tbp.slashsep .. basename .. "." .. self.engine .. tlgext
   fileWrite(file, text)
   local oldfile = testfiledir .. tbp.slashsep .. basename .. tlgext
   return self
@@ -320,8 +341,8 @@ end
 
 function TbpFile:compareTlgFiles()
   local oldtlg = self.srcdir .. tbp.slashsep .. self.basename .. tlgext
-  local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.prog .. tlgext
-  local diffile = self.basename .. "." .. self.prog .. diffext
+  local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. tlgext
+  local diffile = self.basename .. "." .. self.engine .. diffext
   cmd = diffexe .. " " .. oldtlg .. " " .. newtlg .. ">" .. diffile
   self.logerror = self.logerror + tbpExecute(self.destdir, cmd)
   return self
@@ -448,8 +469,13 @@ local function tbpCheckOne(cfg)
     local tbpfile = TbpFile:new(f, cfg):copy(testfiledir, realtestdir)
     print("  " .. tbpfile.basename)
     tbpfile.logerror = 0
-    for _, prog in ipairs(checkprograms) do
-      tbpfile = tbpfile:tex(prog):makeTlgFile():compareTlgFiles()
+    for _, engine in ipairs(checkengines) do
+      local prog = tbpformatcmds[checkformat][engine]
+      if not prog then
+        error("Could not find cmd for engine '" .. engine
+               .. "' and format '" .. checkformat .. "'!")
+      end
+      tbpfile = tbpfile:tex(engine, prog):makeTlgFile():compareTlgFiles()
     end
     if tbpfile.logerror > 0 then
       print("      --> log check failed")
