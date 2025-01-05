@@ -1,14 +1,14 @@
 #!/usr/bin/env texlua
 
--- Description: Image-based regression testing for LaTeX packages
--- Copyright: 2024 (c)  Jianrui Lyu <tolvjr@163.com>
+-- Caption   : Another testing and building system for TeX
+-- Author    : Jianrui Lyu <tolvjr@163.com>
 -- Repository: https://github.com/lvjr/texbuildpkg
--- License: The LaTeX Project Public License 1.3c
+-- License   : The LaTeX Project Public License 1.3c
 
 local tbp = tbp or {}
 
 tbp.version = "2025@"
-tbp.date = "2024-12-15"
+tbp.date = "2025-01-05"
 
 ------------------------------------------------------------
 --> \section{Some variables and functions}
