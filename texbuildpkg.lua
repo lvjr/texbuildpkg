@@ -330,9 +330,9 @@ function TbpFile:normalizeLogFile()
   text = text:gsub("\r\n", "\n")
              :match("START%-TEST%-LOG\n+(.+)\nEND%-TEST%-LOG")
   if not text then
-    error("Could not make tlg file for " .. basename)
+    error("Could not make nlog file for " .. basename)
   end
-  --- normalize tlg file
+  --- normalize nlog file
   text = text:gsub("\n[\n ]*", "\n"):gsub("%(%./", "(")
              :gsub("( on input line )%d+", "%1...")
   file = dir .. tbp.slashsep .. basename .. "." .. self.engine .. nlogext
@@ -342,10 +342,10 @@ function TbpFile:normalizeLogFile()
 end
 
 function TbpFile:compareLogFiles()
-  local oldtlg = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
-  local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
+  local oldnlog = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
+  local newnlog = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
   local diffile = self.basename .. "." .. self.engine .. diffext
-  cmd = diffexe .. " " .. oldtlg .. " " .. newtlg .. ">" .. diffile
+  cmd = diffexe .. " " .. oldnlog .. " " .. newnlog .. ">" .. diffile
   self.logerror = self.logerror + tbpExecute(self.destdir, cmd)
   return self
 end
