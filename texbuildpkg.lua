@@ -44,9 +44,11 @@ end
 local lfs = require("lfs")
 
 if os.type == "windows" then
+  tbp.concat = "&"
   tbp.slashsep = "\\"
   tbp.null = "NUL"
 else
+  tbp.concat = ";"
   tbp.slashsep = "/"
   tbp.null = "/dev/null"
 end
@@ -138,8 +140,7 @@ function tbpGetAbsPath(path)
 end
 
 function tbpExecute(dir, cmd)
-  lfs.chdir(dir)
-  return os.execute(cmd)
+  return os.execute("cd " .. dir .. tbp.concat .. cmd)
 end
 
 local function tbpIpairs(list)
