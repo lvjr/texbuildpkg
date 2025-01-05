@@ -254,6 +254,14 @@ check = {
   runs = 1
 }
 
+typeset = {
+  docdir = ".",
+  docfiles = {"*.dtx", "*.tex"},
+  typesetdir = builddir .. "/typeset",
+  typesetexe = "pdflatex",
+  runs = 3
+}
+
 texext = ".tex"
 logext = ".log"
 nlogext = ".nlog"
@@ -548,6 +556,29 @@ local function tbpCheck()
 end
 
 ------------------------------------------------------------
+--> \section{Typeset documentation files}
+------------------------------------------------------------
+
+local function tbpTypeset()
+  tbpGenerate()
+  local dir = typeset.typesetdir
+  tbpMakeDir(dir)
+  local files = typeset.docfiles
+  tbpCopyFile(check.pkgfiles, generate.unpackdir, dir)
+  tbpCopyFile(check.pkgfiles, check.pkgdir, dir)
+  tbpCopyFile(files, generate.unpackdir, dir)
+  tbpCopyFile(files, typeset.docdir, dir)
+  for _, glob in ipairs(files) do
+    local pattern = tbpGlobToPattern(glob)
+    local filenames = fileSearch(dir, pattern)
+    for _, f in ipairs(filenames) do
+      print("Typeset " .. f)
+      texCompileOne(dir, typeset.typesetexe, f)
+    end
+  end
+end
+
+------------------------------------------------------------
 --> \section{Print help or version text}
 ------------------------------------------------------------
 
@@ -643,6 +674,8 @@ local function tbpMain(tbparg)
     return tbpCheck()
   elseif target == "generate" then
     return tbpGenerate()
+  elseif target == "typeset" then
+    return tbpTypeset()
   elseif target == "help" then
     return help()
   elseif target == "version" then
