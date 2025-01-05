@@ -87,7 +87,7 @@ function fileSearch(path, pattern)
   local files = { }
   for entry in lfs.dir(path) do
     if match(entry, pattern) then
-     insert(files, entry)
+      insert(files, entry)
     end
   end
   return files
@@ -338,8 +338,10 @@ local function tbpGenerate()
     tbpCopyFile(glob, generate.srcdir, dir)
   end
   for _, glob in ipairs(generate.unpackfiles) do
-    local filenames = fileSearch(dir, tbpGlobToPattern(glob))
+    local pattern = tbpGlobToPattern(glob)
+    local filenames = fileSearch(dir, pattern)
     for _, f in ipairs(filenames) do
+      print("Unpack " .. f)
       texCompileOne(dir, generate.unpackexe, f)
     end
   end
