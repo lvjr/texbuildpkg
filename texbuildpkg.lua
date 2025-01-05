@@ -337,16 +337,26 @@ function TbpFile:normalizeLogFile()
              :gsub("( on input line )%d+", "%1...")
   file = dir .. tbp.slashsep .. basename .. "." .. self.engine .. nlogext
   fileWrite(file, text)
-  local oldfile = testfiledir .. tbp.slashsep .. basename .. nlogext
+  self.newnlog = text
   return self
 end
 
 function TbpFile:compareLogFiles()
-  local oldnlog = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
-  local newnlog = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
-  local diffile = self.basename .. "." .. self.engine .. diffext
-  cmd = diffexe .. " " .. oldnlog .. " " .. newnlog .. ">" .. diffile
-  self.logerror = self.logerror + tbpExecute(self.destdir, cmd)
+  local oldfile = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
+  local oldnlog = fileRead(oldfile)
+  oldnlog = oldnlog:gsub("\r\n", "\n")
+  if self.newnlog ~= oldnlog then
+    local newfile = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
+    local diffile = self.basename .. "." .. self.engine .. diffext
+    cmd = diffexe .. " " .. oldfile .. " " .. newfile .. ">" .. diffile
+    tbpExecute(self.destdir, cmd)
+    self.logerror = self.logerror + 1
+    if options.save then
+      fileWrite(oldfile, self.newnlog)
+      print("      --> log file saved")
+    end
+  end
+  self.newnlog = nil
   return self
 end
 
