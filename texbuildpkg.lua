@@ -215,8 +215,6 @@ tbpDeclareConfig({
 
 maindir = "."
 builddir = maindir .. "/tbpbuild"
-testdir = builddir .. "/test"
-testfiledir = "./testfiles"
 
 tbpformatcmds = {
   tex = {
@@ -248,6 +246,8 @@ generate = {
 check = {
   pkgdir = ".",
   pkgfiles = {"*.sty", "*.cls"},
+  testfiledir = "./testfiles",
+  testdir = builddir .. "/test",
   engines = {"pdftex", "xetex", "luatex"},
   format = "latex",
   order = {"log", "img"},
@@ -272,8 +272,9 @@ dofile("tbpconfig.lua")
 
 maindir = tbpGetAbsPath(maindir)
 builddir = tbpGetAbsPath(builddir)
-testdir = tbpGetAbsPath(testdir)
-testfiledir = tbpGetAbsPath(testfiledir)
+
+check.testfiledir = tbpGetAbsPath(check.testfiledir)
+check.testdir = tbpGetAbsPath(check.testdir)
 
 testcfgname = "regression-test"
 cfgext = ".cfg"
@@ -413,7 +414,7 @@ local function pdftoimg(path, pdf)
 end
 
 local function saveImgMd5(dir, imgname, md5file, newmd5)
-  fileCopy(imgname, dir, testfiledir)
+  fileCopy(imgname, dir, check.testfiledir)
   fileWrite(md5file, newmd5)
   print("      --> img file saved")
 end
@@ -421,7 +422,7 @@ end
 local function checkOnePdf(dir, base)
   local e = 0
   local imgname = base .. imgext
-  local md5file = testfiledir .. tbp.slashsep .. base .. ".md5"
+  local md5file = check.testfiledir .. tbp.slashsep .. base .. ".md5"
   local newmd5 = filesum(dir .. tbp.slashsep .. imgname)
   if fileExists(md5file) then
     local oldmd5 = fileRead(md5file)
@@ -429,7 +430,7 @@ local function checkOnePdf(dir, base)
       e = 1
       local imgdiffexe = os.getenv("imgdiffexe")
       if imgdiffexe then
-        local oldimg = testfiledir .. tbp.slashsep .. imgname
+        local oldimg = check.testfiledir .. tbp.slashsep .. imgname
         local newimg = dir .. tbp.slashsep .. imgname
         local diffname = base .. ".diff.png"
         local cmd = imgdiffexe .. " " .. oldimg .. " " .. newimg
@@ -481,8 +482,8 @@ local function tbpCopyCfg(cfg, realtestdir)
   if cfg ~= "default" then
     filename = testcfgname .. "-" .. cfg .. cfgext
   end
-  if fileExists(testfiledir .. tbp.slashsep .. filename) then
-    fileCopy(filename, testfiledir, realtestdir)
+  if fileExists(check.testfiledir .. tbp.slashsep .. filename) then
+    fileCopy(filename, check.testfiledir, realtestdir)
   end
   if cfg ~= "default" then
     fileRename(realtestdir, filename, testcfgname .. cfgext)
@@ -490,19 +491,19 @@ local function tbpCopyCfg(cfg, realtestdir)
 end
 
 local function tbpCheckOne(cfg)
-  local realtestdir = testdir
+  local realtestdir = check.testdir
   if cfg ~= "default" then
-    realtestdir = testdir .. cfg
+    realtestdir = check.testdir .. cfg
   end
   tbpMakeDir({builddir, realtestdir})
   tbpCopyFile(check.pkgfiles, generate.unpackdir, realtestdir)
   tbpCopyFile(check.pkgfiles, check.pkgdir, realtestdir)
   tbpCopyCfg(cfg, realtestdir)
   local pattern = "%" .. texext .. "$"
-  local files = fileSearch(testfiledir, pattern)
+  local files = fileSearch(check.testfiledir, pattern)
   print("Running checks in " .. realtestdir)
   for _, f in ipairs(files) do
-    local tbpfile = TbpFile:new(f, cfg):copy(testfiledir, realtestdir)
+    local tbpfile = TbpFile:new(f, cfg):copy(check.testfiledir, realtestdir)
     print("  " .. tbpfile.basename)
     tbpfile.logerror = 0
     for _, engine in ipairs(check.engines) do
