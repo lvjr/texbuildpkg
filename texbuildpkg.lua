@@ -213,7 +213,7 @@ tbpDeclareConfig({
 })
 
 maindir = "."
-builddir = maindir .. "/tbpdir"
+builddir = maindir .. "/tbpbuild"
 testdir = builddir .. "/test"
 testfiledir = "./testfiles"
 
@@ -236,6 +236,14 @@ tbpformatcmds = {
     luatex = "context --luatex",
     luametatex = "context"
   }
+}
+
+generate = {
+  srcdir = ".",
+  srcfiles = {"*.dtx", "*.ins"},
+  unpackdir = builddir .. "/unpack",
+  unpackfiles = {"*.ins"},
+  unpackexe = "pdftex"
 }
 
 check = {
@@ -303,7 +311,7 @@ end
 local optn = "--interaction=nonstopmode"
 
 local function makeCmdString(prog, name)
-  return prog .. " " .. optn .. " " .. name .. ".tex" .. " >" .. tbp.null
+  return prog .. " " .. optn .. " " .. name .. " >" .. tbp.null
 end
 
 local function texCompileOne(dir, prog, name)
@@ -312,10 +320,28 @@ local function texCompileOne(dir, prog, name)
 end
 
 function TbpFile:tex(engine, prog)
-  texCompileOne(self.destdir, prog, self.basename)
+  texCompileOne(self.destdir, prog, self.filename)
   self.engine = engine
   self.prog = prog
   return self
+end
+
+------------------------------------------------------------
+--> \section{Generate package files from dtx files}
+------------------------------------------------------------
+
+local function tbpGenerate()
+  local dir = generate.unpackdir
+  tbpMakeDir(dir)
+  for _, glob in ipairs(generate.srcfiles) do
+    tbpCopyFile(glob, generate.srcdir, dir)
+  end
+  for _, glob in ipairs(generate.unpackfiles) do
+    local filenames = fileSearch(dir, tbpGlobToPattern(glob))
+    for _, f in ipairs(filenames) do
+      texCompileOne(dir, generate.unpackexe, f)
+    end
+  end
 end
 
 ------------------------------------------------------------
@@ -611,6 +637,8 @@ local function tbpMain(tbparg)
   elseif target == "save" then
     options.save = true
     return tbpCheck()
+  elseif target == "generate" then
+    return tbpGenerate()
   elseif target == "help" then
     return help()
   elseif target == "version" then
