@@ -334,9 +334,7 @@ end
 local function tbpGenerate()
   local dir = generate.unpackdir
   tbpMakeDir(dir)
-  for _, glob in ipairs(generate.srcfiles) do
-    tbpCopyFile(glob, generate.srcdir, dir)
-  end
+  tbpCopyFile(generate.srcfiles, generate.srcdir, dir)
   for _, glob in ipairs(generate.unpackfiles) do
     local pattern = tbpGlobToPattern(glob)
     local filenames = fileSearch(dir, pattern)
