@@ -218,8 +218,6 @@ builddir = maindir .. "/tbpbuild"
 testdir = builddir .. "/test"
 testfiledir = "./testfiles"
 
-sourcefiles = {}
-
 tbpformatcmds = {
   tex = {
     pdftex = "pdftex",
@@ -248,6 +246,8 @@ generate = {
 }
 
 check = {
+  pkgdir = ".",
+  pkgfiles = {"*.sty", "*.cls"},
   engines = {"pdftex", "xetex", "luatex"},
   format = "latex",
   order = {"log", "img"},
@@ -495,7 +495,8 @@ local function tbpCheckOne(cfg)
     realtestdir = testdir .. cfg
   end
   tbpMakeDir({builddir, realtestdir})
-  tbpCopyFile(sourcefiles, maindir, realtestdir)
+  tbpCopyFile(check.pkgfiles, generate.unpackdir, realtestdir)
+  tbpCopyFile(check.pkgfiles, check.pkgdir, realtestdir)
   tbpCopyCfg(cfg, realtestdir)
   local pattern = "%" .. texext .. "$"
   local files = fileSearch(testfiledir, pattern)
@@ -529,6 +530,7 @@ local function tbpCheckOne(cfg)
 end
 
 local function tbpCheck()
+  tbpGenerate()
   for _, cfg in ipairs(options.config) do
     local t = tbpconfigs[cfg]
     if t == nil then
