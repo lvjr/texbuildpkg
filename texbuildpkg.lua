@@ -191,7 +191,8 @@ options = {
   config = {},
   debug = false,
   engine = {},
-  names = {}
+  names = {},
+  save = false
 }
 
 local tbpconfigs = {}
@@ -375,24 +376,20 @@ local function pdftoimg(path, pdf)
 end
 
 local function saveImgMd5(dir, imgname, md5file, newmd5)
-  print("save md5 and image files for " .. imgname)
   fileCopy(imgname, dir, testfiledir)
   fileWrite(md5file, newmd5)
+  print("      --> img file saved")
 end
 
-local issave = false
-
 local function checkOnePdf(dir, base)
-  local errorlevel
+  local e = 0
   local imgname = base .. imgext
   local md5file = testfiledir .. tbp.slashsep .. base .. ".md5"
   local newmd5 = filesum(dir .. tbp.slashsep .. imgname)
   if fileExists(md5file) then
     local oldmd5 = fileRead(md5file)
-    if newmd5 == oldmd5 then
-      errorlevel = 0
-    else
-      errorlevel = 1
+    if newmd5 ~= oldmd5 then
+      e = 1
       local imgdiffexe = os.getenv("imgdiffexe")
       if imgdiffexe then
         local oldimg = testfiledir .. tbp.slashsep .. imgname
@@ -400,17 +397,17 @@ local function checkOnePdf(dir, base)
         local diffname = base .. ".diff.png"
         local cmd = imgdiffexe .. " " .. oldimg .. " " .. newimg
                     .. " -compose src " .. diffname
-        --print("creating image diff file " .. diffname)
+        --print("      --> img diff created")
         tbpExecute(dir, cmd)
-      elseif issave == true then
+      end
+      if options.save == true then
         saveImgMd5(dir, imgname, md5file, newmd5)
       end
     end
   else
-    errorlevel = 0
     saveImgMd5(dir, imgname, md5file, newmd5)
   end
-  return errorlevel
+  return e
 end
 
 function TbpFile:compareImage()
@@ -602,7 +599,7 @@ local function tbpMain(tbparg)
   if action == "check" then
     return tbpCheck()
   elseif action == "save" then
-    issave = true
+    options.save = true
     return tbpCheck()
   elseif action == "help" then
     return help()
