@@ -512,16 +512,16 @@ end
 ------------------------------------------------------------
 
 local helptext = [[
-usage: texbuildpkg <action> [<options>]
+usage: texbuildpkg <target> [<options>]
 
-valid actions are:
+valid targets are:
    check        Run tests without saving outputs of failed tests
    save         Run tests and save outputs of failed tests
    help         Print this message and exit
    version      Print version information and exit
 
 valid options are:
-   -c           Set the config used for check or save action
+   -c           Set the config used for check or save target
 
 please report bug at https://github.com/lvjr/texbuildpkg
 ]]
@@ -592,21 +592,21 @@ end
 
 local function tbpMain(tbparg)
   if tbparg[1] == nil then return help() end
-  local action = remove(tbparg, 1)
+  local target = remove(tbparg, 1)
   -- remove leading dashes
-  action = match(action, "^%-*(.*)$")
+  target = match(target, "^%-*(.*)$")
   tbpParseOptions(tbparg)
-  if action == "check" then
+  if target == "check" then
     return tbpCheck()
-  elseif action == "save" then
+  elseif target == "save" then
     options.save = true
     return tbpCheck()
-  elseif action == "help" then
+  elseif target == "help" then
     return help()
-  elseif action == "version" then
+  elseif target == "version" then
     return version()
   else
-    print("Unknown action '" .. action .. "'\n")
+    print("Unknown target '" .. target .. "'\n")
     return help()
   end
 end

@@ -86,9 +86,8 @@ on Ubuntu/Debian Linux.
 
 \section{Usages}
 
-You could call \myopt{check} action of \mypkg{TeXBuildPkg} with the folllowing commands
+You could call \myopt{check} target of \mypkg{TeXBuildPkg} with the folllowing commands
 \begin{codehigh}
-l3build check
 texbuildpkg check
 \end{codehigh}
 
@@ -98,17 +97,16 @@ and the subsequent runs of it will compare new md5 values with existing md5 valu
 You could force \mypkg{TeXBuildPkg} to save new image and md5 files of failed tests to
 \myfile{testfiles} folder by calling \myopt{save} option of it:
 \begin{codehigh}
-l3build check
 texbuildpkg save
 \end{codehigh}
 
-Both \myopt{check} and \myopt{save} actions accept \myopt{-c} option, which sets the config to used.
+Both \myopt{check} and \myopt{save} targets accept \myopt{-c} option, which sets the config to used.
 
 \section{Customizations}
 
 The \myprg{pdftoppm} program supports several types of image files.
 By default the \mypkg{TeXBuildPkg} tool will use \myfile{.png} file,
-and you could change it in \myfile{build.lua} file like this:
+and you could change it in \myfile{tbpconfig.lua} file like this:
 \begin{codehigh}
 imgext = ".ppm"
 \end{codehigh}
