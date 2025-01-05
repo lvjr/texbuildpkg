@@ -322,7 +322,7 @@ end
 --> \section{Log-based regression tests}
 ------------------------------------------------------------
 
-function TbpFile:makeTlgFile()
+function TbpFile:normalizeLogFile()
   local dir = self.destdir
   local basename = self.basename
   local file = dir .. tbp.slashsep .. basename .. logext
@@ -341,7 +341,7 @@ function TbpFile:makeTlgFile()
   return self
 end
 
-function TbpFile:compareTlgFiles()
+function TbpFile:compareLogFiles()
   local oldtlg = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
   local newtlg = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
   local diffile = self.basename .. "." .. self.engine .. diffext
@@ -473,7 +473,7 @@ local function tbpCheckOne(cfg)
         error("Could not find cmd for engine '" .. engine
                .. "' and format '" .. check.format .. "'!")
       end
-      tbpfile = tbpfile:tex(engine, prog):makeTlgFile():compareTlgFiles()
+      tbpfile = tbpfile:tex(engine, prog):normalizeLogFile():compareLogFiles()
     end
     if tbpfile.logerror > 0 then
       print("      --> log check failed")
