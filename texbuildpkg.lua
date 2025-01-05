@@ -237,11 +237,12 @@ tbpformatcmds = {
   }
 }
 
-checkconfigs = {"build"}
-checkengines = {"pdftex", "xetex", "luatex"}
-checkformat = "latex"
-test_order = {"log", "pdf"}
-checkruns = 1
+check = {
+  engines = {"pdftex", "xetex", "luatex"},
+  format = "latex",
+  order = {"log", "img"},
+  runs = 1
+}
 
 lvtext = ".tex"
 tlgext = ".tlg"
@@ -469,11 +470,11 @@ local function tbpCheckOne(cfg)
     local tbpfile = TbpFile:new(f, cfg):copy(testfiledir, realtestdir)
     print("  " .. tbpfile.basename)
     tbpfile.logerror = 0
-    for _, engine in ipairs(checkengines) do
-      local prog = tbpformatcmds[checkformat][engine]
+    for _, engine in ipairs(check.engines) do
+      local prog = tbpformatcmds[check.format][engine]
       if not prog then
         error("Could not find cmd for engine '" .. engine
-               .. "' and format '" .. checkformat .. "'!")
+               .. "' and format '" .. check.format .. "'!")
       end
       tbpfile = tbpfile:tex(engine, prog):makeTlgFile():compareTlgFiles()
     end
