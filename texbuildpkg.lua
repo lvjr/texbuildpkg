@@ -21,6 +21,13 @@ local remove           = table.remove
 local match            = string.match
 local gsub             = string.gsub
 
+local function valueExists(tab, val)
+  for _, v in ipairs(tab) do
+    if v == val then return true end
+  end
+  return false
+end
+
 local md5 = require("md5")
 
 local function md5sum(str)
@@ -180,6 +187,30 @@ end
 --> \section{Initialize TeXBuildPkg}
 ------------------------------------------------------------
 
+options = {
+  config = {},
+  debug = false,
+  engine = {},
+  names = {}
+}
+
+local tbpconfigs = {}
+
+function tbpDeclareConfig(o)
+  tbpconfigs[o.name] = {
+    base = o.base,
+    code = o.code
+  }
+  if not valueExists(options.config, o.name) then
+    table.insert(options.config, o.name)
+  end
+end
+
+tbpDeclareConfig({
+  name = "default",
+  code = function()end
+})
+
 maindir = "."
 builddir = maindir .. "/tbpdir"
 testdir = builddir .. "/test"
@@ -191,8 +222,6 @@ checkconfigs = {"build"}
 checkprograms = {"pdflatex", "xelatex", "lualatex"}
 test_order = {"log", "pdf"}
 checkruns = 1
-
-moreconfigs = {}
 
 lvtext = ".tex"
 tlgext = ".tlg"
@@ -207,13 +236,6 @@ else
   diffext = ".diff"
   diffexe = "diff -c --strip-trailing-cr"
 end
-
-options = {
-  config = {"default"},
-  debug = false,
-  engine = {},
-  names = {}
-}
 
 dofile("tbpconfig.lua")
 
@@ -446,11 +468,16 @@ local function tbpCheckOne(cfg)
 end
 
 local function tbpCheck()
-  tbpCheckOne("default")
-  if #moreconfigs > 0 then
-    for _, item in ipairs(moreconfigs) do
-      item[2]()
-      tbpCheckOne(item[1])
+  for _, cfg in ipairs(options.config) do
+    local t = tbpconfigs[cfg]
+    if t == nil then
+      print("Unknown config " .. cfg .. "\n")
+    else
+      if t.base then
+        tbpconfigs[t.base].code()
+      end
+      t.code()
+      tbpCheckOne(cfg)
     end
   end
   return errorlevel
