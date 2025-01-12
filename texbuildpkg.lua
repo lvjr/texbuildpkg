@@ -358,14 +358,21 @@ end
 --> \section{Log-based regression tests}
 ------------------------------------------------------------
 
+local dashlines = "============================================================"
+
 function TbpFile:normalizeLogFile()
   local dir = self.destdir
   local basename = self.basename
   local file = dir .. tbp.slashsep .. basename .. logext
   local text = fileRead(file)
   text = text:gsub("\r\n", "\n")
-             :match("START%-TEST%-LOG\n+(.+)\nEND%-TEST%-LOG")
-  if not text then
+  local t = text:match("START%-TEST%-LOG\n+(.+)\nEND%-TEST%-LOG")
+  if t then
+    text = t
+  else
+    text = text:match("\n(" .. dashlines .. "\n.+)\nEND%-TEST%-LOG")
+  end
+  if text == nil then
     error("Could not make nlog file for " .. basename)
   end
   --- normalize nlog file
