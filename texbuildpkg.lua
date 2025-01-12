@@ -545,7 +545,10 @@ local function tbpCheckOne(cfg)
         error("Could not find cmd for engine '" .. engine
                .. "' and format '" .. check_format .. "'!")
       end
-      tbpfile = tbpfile:tex(engine, prog):normalizeLogFile():compareLogFiles()
+      for i = 1, check_runs do
+        tbpfile = tbpfile:tex(engine, prog)
+      end
+      tbpfile = tbpfile:normalizeLogFile():compareLogFiles()
     end
     if tbpfile.logerror > 0 then
       print("      --> log check failed")
@@ -598,7 +601,9 @@ local function tbpTypeset()
     local filenames = fileSearch(dir, pattern)
     for _, f in ipairs(filenames) do
       print("Typeset " .. f)
-      texCompileOne(dir, typeset_exe, f)
+      for i = 1, typeset_runs do
+        texCompileOne(dir, typeset_exe, f)
+      end
     end
   end
 end
