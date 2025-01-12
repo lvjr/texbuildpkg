@@ -276,7 +276,7 @@ else
   diffexe = "diff -c --strip-trailing-cr"
 end
 
-dofile("tbpconfig.lua")
+dofile("tbpbuild.lua")
 
 maindir = tbpGetAbsPath(maindir)
 builddir = tbpGetAbsPath(builddir)
