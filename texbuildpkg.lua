@@ -379,18 +379,24 @@ end
 
 function TbpFile:compareLogFiles()
   local oldfile = self.srcdir .. tbp.slashsep .. self.basename .. nlogext
-  local oldnlog = fileRead(oldfile)
-  oldnlog = oldnlog:gsub("\r\n", "\n")
-  if self.newnlog ~= oldnlog then
-    local newfile = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
-    local diffile = self.basename .. "." .. self.engine .. diffext
-    cmd = diffexe .. " " .. oldfile .. " " .. newfile .. ">" .. diffile
-    tbpExecute(self.destdir, cmd)
-    self.logerror = self.logerror + 1
-    if options.save then
-      fileWrite(oldfile, self.newnlog)
-      print("      --> log file saved")
+  local oldnlog = ""
+  if fileExists(oldfile) then
+    oldnlog = fileRead(oldfile)
+    oldnlog = oldnlog:gsub("\r\n", "\n")
+    if self.newnlog ~= oldnlog then
+      local newfile = self.destdir .. tbp.slashsep .. self.basename .. "." .. self.engine .. nlogext
+      local diffile = self.basename .. "." .. self.engine .. diffext
+      cmd = diffexe .. " " .. oldfile .. " " .. newfile .. ">" .. diffile
+      tbpExecute(self.destdir, cmd)
+      self.logerror = self.logerror + 1
+      if options.save then
+        fileWrite(oldfile, self.newnlog)
+        print("      --> log file saved")
+      end
     end
+  else
+    fileWrite(oldfile, self.newnlog)
+    print("      --> log file created")
   end
   self.newnlog = nil
   return self
