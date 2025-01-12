@@ -218,7 +218,7 @@ builddir = maindir .. "/tbpbuild"
 
 tbpformatcmds = {
   tex = {
-    pdftex = "pdftex",
+    pdftex = "pdfetex", -- require etex
     xetex = "xetex",
     luatex = "luatex"
   },
