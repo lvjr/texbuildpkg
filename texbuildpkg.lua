@@ -235,26 +235,21 @@ tbpformatcmds = {
   }
 }
 
-generate = {
-  srcdir = ".",
-  srcfiles = {"*.dtx", "*.ins"},
-  unpackdir = builddir .. "/unpack",
-  unpackfiles = {"*.ins"},
-  unpackexe = "pdftex"
-}
+generate_srcdir = "."
+generate_srcfiles = {"*.dtx", "*.ins"}
+generate_rundir = builddir .. "/generate"
+generate_runfiles = {"*.ins"}
+generate_exe = "pdftex"
 
-check = {
-  pkgdir = ".",
-  pkgfiles = {"*.sty", "*.cls"},
-  testfiledir = "./testfiles",
-  testdir = builddir .. "/test",
-  engines = {"pdftex", "xetex", "luatex"},
-  format = "latex",
-  order = {"log", "img"},
-  runs = 1
-}
-
-check_normlist = {
+check_pkgdir = "."
+check_pkgfiles = {"*.sty", "*.cls"}
+check_testfiledir = "./testfiles"
+check_rundir = builddir .. "/check"
+check_engines = {"pdftex", "xetex", "luatex"}
+check_format = "latex"
+check_order = {"log", "img"}
+check_runs = 1
+check_nlogsubs = {
   {"%(%./", "("},
   {"( on input line )%d+", "%1..."},
   {"(\n\\[^\n=]+=\\box)%d+\n", "%1...\n"},
@@ -264,13 +259,11 @@ check_normlist = {
   {"(\nl%.)%d+ ", "%1 ..."}
 }
 
-typeset = {
-  docdir = ".",
-  docfiles = {"*.dtx", "*.tex"},
-  typesetdir = builddir .. "/typeset",
-  typesetexe = "pdflatex",
-  runs = 3
-}
+typeset_docdir = "."
+typeset_docfiles = {"*.dtx", "*.tex"}
+typeset_rundir = builddir .. "/typeset"
+typeset_exe = "pdflatex"
+typeset_runs = 3
 
 texext = ".tex"
 logext = ".log"
@@ -291,8 +284,8 @@ dofile("tbpbuild.lua")
 maindir = tbpGetAbsPath(maindir)
 builddir = tbpGetAbsPath(builddir)
 
-check.testfiledir = tbpGetAbsPath(check.testfiledir)
-check.testdir = tbpGetAbsPath(check.testdir)
+check_testfiledir = tbpGetAbsPath(check_testfiledir)
+check_rundir = tbpGetAbsPath(check_rundir)
 
 testcfgname = "regression-test"
 cfgext = ".cfg"
@@ -351,15 +344,15 @@ end
 ------------------------------------------------------------
 
 local function tbpGenerate()
-  local dir = generate.unpackdir
+  local dir = generate_rundir
   tbpMakeDir(dir)
-  tbpCopyFile(generate.srcfiles, generate.srcdir, dir)
-  for _, glob in ipairs(generate.unpackfiles) do
+  tbpCopyFile(generate_srcfiles, generate_srcdir, dir)
+  for _, glob in ipairs(generate_runfiles) do
     local pattern = tbpGlobToPattern(glob)
     local filenames = fileSearch(dir, pattern)
     for _, f in ipairs(filenames) do
       print("Unpack " .. f)
-      texCompileOne(dir, generate.unpackexe, f)
+      texCompileOne(dir, generate_exe, f)
     end
   end
 end
@@ -386,7 +379,7 @@ function TbpFile:normalizeLogFile()
     error("Could not make nlog file for " .. basename)
   end
   --- normalize nlog file
-  for _, v in ipairs(check_normlist) do
+  for _, v in ipairs(check_nlogsubs) do
     text = text:gsub(v[1], v[2])
   end
   --- remove empty lines
@@ -454,7 +447,7 @@ local function pdftoimg(path, pdf)
 end
 
 local function saveImgMd5(dir, imgname, md5file, newmd5)
-  fileCopy(imgname, dir, check.testfiledir)
+  fileCopy(imgname, dir, check_testfiledir)
   fileWrite(md5file, newmd5)
   print("      --> img file saved")
 end
@@ -462,7 +455,7 @@ end
 local function checkOnePdf(dir, base)
   local e = 0
   local imgname = base .. imgext
-  local md5file = check.testfiledir .. tbp.slashsep .. base .. ".md5"
+  local md5file = check_testfiledir .. tbp.slashsep .. base .. ".md5"
   local newmd5 = filesum(dir .. tbp.slashsep .. imgname)
   if fileExists(md5file) then
     local oldmd5 = fileRead(md5file)
@@ -470,7 +463,7 @@ local function checkOnePdf(dir, base)
       e = 1
       local imgdiffexe = os.getenv("imgdiffexe")
       if imgdiffexe then
-        local oldimg = check.testfiledir .. tbp.slashsep .. imgname
+        local oldimg = check_testfiledir .. tbp.slashsep .. imgname
         local newimg = dir .. tbp.slashsep .. imgname
         local diffname = base .. ".diff.png"
         local cmd = imgdiffexe .. " " .. oldimg .. " " .. newimg
@@ -522,8 +515,8 @@ local function tbpCopyCfg(cfg, realtestdir)
   if cfg ~= "default" then
     filename = testcfgname .. "-" .. cfg .. cfgext
   end
-  if fileExists(check.testfiledir .. tbp.slashsep .. filename) then
-    fileCopy(filename, check.testfiledir, realtestdir)
+  if fileExists(check_testfiledir .. tbp.slashsep .. filename) then
+    fileCopy(filename, check_testfiledir, realtestdir)
   end
   if cfg ~= "default" then
     fileRename(realtestdir, filename, testcfgname .. cfgext)
@@ -531,26 +524,26 @@ local function tbpCopyCfg(cfg, realtestdir)
 end
 
 local function tbpCheckOne(cfg)
-  local realtestdir = check.testdir
+  local realtestdir = check_rundir
   if cfg ~= "default" then
-    realtestdir = check.testdir .. cfg
+    realtestdir = check_rundir .. cfg
   end
   tbpMakeDir({builddir, realtestdir})
-  tbpCopyFile(check.pkgfiles, generate.unpackdir, realtestdir)
-  tbpCopyFile(check.pkgfiles, check.pkgdir, realtestdir)
+  tbpCopyFile(check_pkgfiles, generate_rundir, realtestdir)
+  tbpCopyFile(check_pkgfiles, check_pkgdir, realtestdir)
   tbpCopyCfg(cfg, realtestdir)
   local pattern = "%" .. texext .. "$"
-  local files = fileSearch(check.testfiledir, pattern)
+  local files = fileSearch(check_testfiledir, pattern)
   print("Running checks in " .. realtestdir)
   for _, f in ipairs(files) do
-    local tbpfile = TbpFile:new(f, cfg):copy(check.testfiledir, realtestdir)
+    local tbpfile = TbpFile:new(f, cfg):copy(check_testfiledir, realtestdir)
     print("  " .. tbpfile.basename)
     tbpfile.logerror = 0
-    for _, engine in ipairs(check.engines) do
-      local prog = tbpformatcmds[check.format][engine]
+    for _, engine in ipairs(check_engines) do
+      local prog = tbpformatcmds[check_format][engine]
       if not prog then
         error("Could not find cmd for engine '" .. engine
-               .. "' and format '" .. check.format .. "'!")
+               .. "' and format '" .. check_format .. "'!")
       end
       tbpfile = tbpfile:tex(engine, prog):normalizeLogFile():compareLogFiles()
     end
@@ -593,19 +586,19 @@ end
 
 local function tbpTypeset()
   tbpGenerate()
-  local dir = typeset.typesetdir
+  local dir = typeset_rundir
   tbpMakeDir(dir)
-  local files = typeset.docfiles
-  tbpCopyFile(check.pkgfiles, generate.unpackdir, dir)
-  tbpCopyFile(check.pkgfiles, check.pkgdir, dir)
-  tbpCopyFile(files, generate.unpackdir, dir)
-  tbpCopyFile(files, typeset.docdir, dir)
+  local files = typeset_docfiles
+  tbpCopyFile(check_pkgfiles, generate_rundir, dir)
+  tbpCopyFile(check_pkgfiles, check_pkgdir, dir)
+  tbpCopyFile(files, generate_rundir, dir)
+  tbpCopyFile(files, typeset_docdir, dir)
   for _, glob in ipairs(files) do
     local pattern = tbpGlobToPattern(glob)
     local filenames = fileSearch(dir, pattern)
     for _, f in ipairs(filenames) do
       print("Typeset " .. f)
-      texCompileOne(dir, typeset.typesetexe, f)
+      texCompileOne(dir, typeset_exe, f)
     end
   end
 end
