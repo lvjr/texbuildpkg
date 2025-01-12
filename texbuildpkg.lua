@@ -254,6 +254,16 @@ check = {
   runs = 1
 }
 
+check_normlist = {
+  {"%(%./", "("},
+  {"( on input line )%d+", "%1..."},
+  {"(\n\\[^\n=]+=\\box)%d+\n", "%1...\n"},
+  {"(\n\\[^\n=]+=\\count)%d+\n", "%1...\n"},
+  {"(\n\\[^\n=]+=\\dimen)%d+\n", "%1...\n"},
+  {"(\n\\[^\n=]+=\\skip)%d+\n", "%1...\n"},
+  {"(\nl%.)%d+ ", "%1 ..."}
+}
+
 typeset = {
   docdir = ".",
   docfiles = {"*.dtx", "*.tex"},
@@ -376,8 +386,17 @@ function TbpFile:normalizeLogFile()
     error("Could not make nlog file for " .. basename)
   end
   --- normalize nlog file
-  text = text:gsub("\n[\n ]*", "\n"):gsub("%(%./", "(")
-             :gsub("( on input line )%d+", "%1...")
+  for _, v in ipairs(check_normlist) do
+    text = text:gsub(v[1], v[2])
+  end
+  --- remove empty lines
+  local t = ""
+  for line, eol in text:gmatch("([^\n]*)([\n$])") do
+    if not line:match("^ *$") then
+      t = t .. line .. eol
+    end
+  end
+  text = t
   file = dir .. tbp.slashsep .. basename .. "." .. self.engine .. nlogext
   fileWrite(file, text)
   self.newnlog = text
