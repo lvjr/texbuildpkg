@@ -177,6 +177,8 @@ local function cfgToDir(cfg)
   if cfg == "build" then
     return testdir
   else
+    -- testfiledir may has been changed
+    dofile(cfg .. ".lua")
     return testdir .. "-" .. cfg
   end
 end
